@@ -10,8 +10,31 @@ const socket = io(SOCKET_URL, {
 function App() {
     const [messages, setMessages] = useState([]);
     const [input, setInput] = useState('');
+    const [serverOnline, setServerOnline] = useState(null); // null = checking, false = down, true = up
 
     useEffect(() => {
+        // Perform health check
+        fetch(`${SOCKET_URL}/health`)
+            .then((res) => {
+                if (!res.ok) throw new Error('Health check failed');
+                return res.json();
+            })
+            .then((data) => {
+                if (data.status === 'ok') {
+                    setServerOnline(true);
+                } else {
+                    setServerOnline(false);
+                }
+            })
+            .catch((err) => {
+                console.error('Health check failed:', err.message);
+                setServerOnline(false);
+            });
+    }, []);
+
+    useEffect(() => {
+        if (!serverOnline) return;
+
         socket.on('connect', () => {
             console.log(`Connected to ${SOCKET_URL}`);
             setMessages((prev) => [...prev, { from: 'system', text: `Connected to ${SOCKET_URL}` }]);
@@ -31,7 +54,7 @@ function App() {
             socket.off('message');
             socket.off('disconnect');
         };
-    }, []);
+    }, [serverOnline]);
 
     const sendMessage = () => {
         if (input.trim() !== '') {
@@ -40,6 +63,18 @@ function App() {
             setInput('');
         }
     };
+
+    if (serverOnline === null) {
+        return <div style={{ padding: 20 }}>Checking server status...</div>;
+    }
+
+    if (!serverOnline) {
+        return (
+            <div style={{ padding: 20, color: 'red' }}>
+                Server is currently unavailable. Please try again later.
+            </div>
+        );
+    }
 
     return (
         <div style={{ padding: 20 }}>
